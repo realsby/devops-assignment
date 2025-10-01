@@ -1,0 +1,32 @@
+# Local-ish stack. This is also roughly what runs on the box: the same
+# compose file is copied up and `docker compose up -d` is run there by hand.
+version: "3"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wellis
+    ports:
+      # Exposed so we can connect with a GUI from a laptop when debugging.
+      - "0.0.0.0:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  portal:
+    build: ./portal
+    env_file: ./.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  notifier:
+    build: ./notifier
+    env_file: ./.env
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
