@@ -1,0 +1,8 @@
+{
+  "type": "service_account",
+  "project_id": "wellis-status-prod",
+  "private_key_id": "f010a74e3680c28a17717a1c7c366b06",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIBVwFAKEKEYdonotuse9545a5d6df5f5266e3b2973c2641343cdb22e9ff938b8210FAKEKEYdonotuse\n-----END PRIVATE KEY-----\n",
+  "client_email": "ops-sa@wellis-status-prod.iam.gserviceaccount.com",
+  "token_uri": "https://oauth2.googleapis.com/token"
+}
