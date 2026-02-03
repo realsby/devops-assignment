@@ -2,3 +2,4 @@ node_modules/
 __pycache__/
 *.pyc
 *.sql.bak
+sa-key.json
