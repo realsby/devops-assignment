@@ -1,0 +1,7 @@
+# What's in crontab -e on the prod box, copied here so we remember.
+# (The notifier also loops on its own, but this restarts it if it dies.)
+
+*/5 * * * * cd /opt/wellis-status && docker compose up -d notifier >> /var/log/notifier.log 2>&1
+
+# Nightly DB dump. Goes to /home/deploy on the same box.
+0 2 * * * pg_dump wellis > /home/deploy/wellis-$(date +\%F).sql
