@@ -1,8 +1,13 @@
 # wellis-status
 
 Internal tool for the Wellis care team: look patients up, queue appointment
-reminders. Read `RUNBOOK.md` first — it's the handover memo from the people
-who ran this.
+reminders.
+
+**If you're here for the take-home, start with [ASSIGNMENT.md](ASSIGNMENT.md).**
+Then read [RUNBOOK.md](RUNBOOK.md), the handover memo from the people who have
+been running this system.
+
+All data in this repository is synthetic. No real person appears in it.
 
 ## Run it locally
 
