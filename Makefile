@@ -20,3 +20,10 @@ logs:
 
 test:
 	./scripts/test.sh
+
+# Who has access to what (access/team.yaml) vs. what's actually true
+# (GitHub collaborators/invites, ops/authorized_keys, the portal's SSM
+# tokens). Exits non-zero on drift. AWS_PROFILE isn't required — the
+# portal-token check just warns and skips if it can't reach AWS.
+access-review:
+	AWS_PROFILE=backendlab-production python3 scripts/access/access.py review

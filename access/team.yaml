@@ -1,0 +1,148 @@
+# Source of truth for who can reach wellis-status and at what level.
+# Replaces ops/TEAM.md. This describes TARGET state — least privilege,
+# not necessarily what's live right now. scripts/access/access.py review
+# diffs this against the systems it can actually check (GitHub
+# collaborators/invites, ops/authorized_keys, the portal's SSM
+# API_TOKENS) and reports the gap; it does not silently fix it.
+#
+# access.github_repo:   none | read | write | admin
+#                        (permission on this GitHub repo specifically —
+#                        matches GitHub's own role_name values)
+# access.ssh:            yes | no
+#                        (legacy access to the box, tracked in
+#                        ops/authorized_keys — see FINDINGS.md SEC-08/09)
+# access.aws:            none | readonly | admin
+#                        (backendlab-production account — the new AWS
+#                        infra from infra/terraform/prod. No live check
+#                        yet: that Terraform grants access to service
+#                        roles, not individual humans, so there's nothing
+#                        to diff this against today — see AGENT-NOTES)
+# access.legacy_gcp:     none | viewer | editor | owner
+#                        (the OLD wellis-status-prod GCP project —
+#                        infra/PROVISIONING.md. That project is being
+#                        decommissioned, so the target for every person
+#                        below is none regardless of what they had before
+#                        — this field mostly exists so offboarding can
+#                        reason about what a leaver could still read
+#                        there in the meantime)
+# access.portal_token:   yes | no
+#                        (should hold a personal named token in the
+#                        portal's /wellis/prod/portal/API_TOKENS SSM
+#                        param, matched by this person's id — this didn't
+#                        exist before the portal had auth at all, see
+#                        FINDINGS.md SEC-02/git history)
+# access.messaging_dashboard: yes | no
+#                        (the messaging provider's own dashboard — no
+#                        API, tracked here for the offboarding checklist
+#                        only)
+
+people:
+  # The real GitHub repo owner and the new infra hire (this take-home).
+  # Added so `review` doesn't flag them as an "unexpected collaborator"
+  # — they're not unexpected, they're the person all of this belongs to.
+  - id: realsby
+    name: realsby
+    role: Infra / platform
+    github: realsby
+    status: active
+    access:
+      github_repo: admin
+      ssh: no
+      aws: admin
+      # Never had it and never will -- hired after the GCP era, and it's
+      # being decommissioned, not handed to anyone new.
+      legacy_gcp: none
+      # The "reviewer" token in infra/terraform/prod/ssm.tf.
+      portal_token: yes
+      messaging_dashboard: yes
+
+  - id: ilya
+    name: Ilya
+    role: Backend / infra
+    github: ilya-w
+    status: active
+    access:
+      github_repo: admin
+      ssh: yes
+      aws: admin
+      # Current: owner (ops/TEAM.md). Target: none, same as everyone else
+      # below -- the old project is being decommissioned, not kept around
+      # for whoever set it up.
+      legacy_gcp: owner
+      portal_token: yes
+      messaging_dashboard: yes
+
+  - id: rover
+    name: Rover
+    role: Web
+    github: rover-dev
+    status: active
+    access:
+      github_repo: write
+      # Reduced from ops/TEAM.md (had SSH to the box): web work ships
+      # through CI now, not a laptop pushing straight to the box.
+      ssh: no
+      # Reduced: no reason for a web engineer to have console/CLI access
+      # to the new AWS account that holds patient data.
+      aws: none
+      # Current: editor (ops/TEAM.md). Target: none -- see the field
+      # comment above, the whole project is going away.
+      legacy_gcp: editor
+      portal_token: no
+      messaging_dashboard: no
+
+  - id: hossam
+    name: Hossam
+    role: Payments
+    github: hossam-p
+    status: active
+    access:
+      # Payments doesn't touch this repo's code.
+      github_repo: none
+      ssh: no
+      # Reduced: payments has no reason to see the AWS account that holds
+      # patient data, not even read-only.
+      aws: none
+      # Current: viewer (ops/TEAM.md). Target: none.
+      legacy_gcp: viewer
+      portal_token: no
+      messaging_dashboard: no
+
+  - id: paul
+    name: Paul
+    role: Mobile
+    github: paul-rn
+    status: active
+    access:
+      github_repo: none
+      ssh: no
+      aws: none
+      legacy_gcp: none
+      portal_token: no
+      messaging_dashboard: no
+
+  - id: tomas
+    name: Tomas
+    role: Contractor
+    github: tomas-ext
+    status: active
+    end_date:
+    # Deliberately NOT reduced by hand — this still reflects his real old
+    # access (ops/TEAM.md: "contract ended, offboarding TODO"), not a
+    # tidied-up version of it. `scripts/access/access.py offboard tomas
+    # --apply` is what's supposed to flip this to status: left and
+    # actually pull the access, so there's a real change and a real
+    # audit record to point to, not a table edit nobody can verify
+    # happened.
+    #
+    # aws: none and portal_token: no are not reductions -- neither the
+    # AWS account nor portal auth existed yet when he left. His real
+    # access was: GitHub write, SSH to the old box, GCP editor on the
+    # old project, and the messaging dashboard.
+    access:
+      github_repo: write
+      ssh: yes
+      aws: none
+      legacy_gcp: editor
+      portal_token: no
+      messaging_dashboard: yes

@@ -1,5 +1,6 @@
 # deploy@ authorized_keys, mirrored here from the box so we have a copy.
-# One line per person. Never pruned.
+# One line per person. Source of truth for who should be here is
+# access/team.yaml (access.ssh) -- pruned to match it, not by hand as
+# keys go stale.
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL1ilyawIQr3xkeyPLACEHOLDERaaaaaaaaaaaaaaaa ilya
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIRoverkeyPLACEHOLDERbbbbbbbbbbbbbbbbbbbbbbbb rover
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITomasContractorkeyLEFTinAPRIL2026cccccccccc tomas-ext

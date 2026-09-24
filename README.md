@@ -43,7 +43,11 @@ and `FINDINGS.md` DATA-01/DATA-02/DATA-03 for what was wrong with it).
 - `migrations/` — SQL, applied in order by `scripts/migrate.sh`
 - `db/init/` — local-only: creates the app DB roles (Terraform does this
   in prod)
-- `infra/` — how the environment was built (no IaC yet)
-- `scripts/` — deploy, migrate, seed, test
-- `ops/` — crontab, team/access notes
-- `Makefile` — `up` / `down` / `test` / `logs`
+- `infra/` — `infra/terraform/` (bootstrap + prod); `PROVISIONING.md` is
+  how the old box was built by hand, kept for history
+- `scripts/` — deploy, migrate, seed, test, access
+- `ops/` — crontab, legacy SSH `authorized_keys`
+- `access/` — `team.yaml`, the source of truth for who has access to
+  what (replaces the old `ops/TEAM.md`); `audit/` holds offboarding
+  records
+- `Makefile` — `up` / `down` / `test` / `logs` / `access-review`

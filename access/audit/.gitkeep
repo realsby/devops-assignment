@@ -1,0 +1,3 @@
+# Offboarding audit records land here: <date>-offboard-<id>.json, one
+# per `scripts/access/access.py offboard <id> --apply` run. Git tracks
+# an otherwise-empty directory, so this file exists to keep it around.
