@@ -12,8 +12,26 @@ If you're here for the take-home, start with `ASSIGNMENT.md`. See
 `RUNBOOK.md` for on-call, `AGENT-NOTES.md` for how the agent work was
 steered. All data is synthetic — no real person appears in it.
 
-**Deployed URL:** _not live yet — the prod `terraform apply` is pending
-the user's approval. See "IaC layout" below for what applying it does._
+**Deployed URL:** https://q5iggtv4bidmjwrcskfhwle34i0eaxhy.lambda-url.eu-central-1.on.aws
+
+```
+curl -s https://q5iggtv4bidmjwrcskfhwle34i0eaxhy.lambda-url.eu-central-1.on.aws/healthz
+curl -s -H "Authorization: Bearer $TOKEN" https://q5iggtv4bidmjwrcskfhwle34i0eaxhy.lambda-url.eu-central-1.on.aws/api/summary
+```
+
+`$TOKEN` is the `reviewer` token, sent separately with the submission (it
+is not in this repo). First request after idle can take ~2s: Lambda cold
+start plus Neon waking up from scale-to-zero.
+
+## Evidence it runs
+
+| What | Where |
+|---|---|
+| CI caught a real problem | [run 36009567436](https://github.com/realsby/devops-assignment/actions/runs/36009567436): the original migration 003 failed squawk (column rename, `SET NOT NULL`) and broke `make up`. Fixed by rewriting it expand-only, green in [run 36010336126](https://github.com/realsby/devops-assignment/actions/runs/36010336126) |
+| Deploy from CI (build, schema guard, push, update, smoke test) | [run 36026482812](https://github.com/realsby/devops-assignment/actions/runs/36026482812), `deploy` job |
+| Migration rehearsed on a Neon branch, then applied | [run 36026499417](https://github.com/realsby/devops-assignment/actions/runs/36026499417). The run before it [failed on OIDC](https://github.com/realsby/devops-assignment/actions/runs/36026188444): GitHub now issues immutable `sub` claims, trust policy fixed in `e5ae13e` |
+| An alarm that fired on a real problem | `wellis-status-notifier-lambda-errors` went to ALARM at 16:17 UTC on 2026-09-24: the scheduler ran the notifier before migrations were applied (`relation "reminders" does not exist`). It went back to OK after the migrate run. `overdue-reminders` fired too, because no successful run reported (missing data = breaching) |
+| Leaver handled by a script | `access/audit/2026-09-24-offboard-tomas.json`, commit "offboard tomas-ext ..." |
 
 ## Architecture
 
