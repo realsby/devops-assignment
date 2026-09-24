@@ -1,5 +1,8 @@
 # How the environment got built
 
+**Legacy.** This is the click-ops record of the old GCP box, kept for
+history. Current infra is `infra/terraform/` — see the root `README.md`.
+
 There is no Terraform. This is the written-down version of what someone
 clicked to stand the thing up. If the box dies, this is what you'd redo by
 hand.
