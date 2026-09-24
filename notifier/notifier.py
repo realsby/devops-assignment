@@ -18,8 +18,15 @@ from datetime import datetime, timezone
 import boto3
 import psycopg2
 
+from load_ssm_params import load_ssm_params
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("notifier")
+
+# No-op locally (SSM_PARAMETER_PATH unset); on Lambda this has to run
+# before the os.environ.get() calls below, not just before main()/
+# handler() — those calls happen once, at import time.
+load_ssm_params()
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/wellis"

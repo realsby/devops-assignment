@@ -8,6 +8,6 @@ FROM public.ecr.aws/lambda/python:3.13
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
 RUN pip install --no-cache-dir -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
-COPY notifier.py ${LAMBDA_TASK_ROOT}
+COPY notifier.py load_ssm_params.py ${LAMBDA_TASK_ROOT}
 
 CMD ["notifier.handler"]
