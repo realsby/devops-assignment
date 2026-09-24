@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 *.sql.bak
 sa-key.json
+.pytest_cache/
+.venv/
+
+# All dotenv files are ignored except the checked-in example.
+.env*
+!.env.example
