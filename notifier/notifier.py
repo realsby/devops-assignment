@@ -56,6 +56,62 @@ def fetch_due(conn):
     return cur.fetchall()
 
 
+def count_overdue(conn):
+    """queued reminders whose send_at is more than 30 minutes in the
+    past -- the "patients aren't getting reminders" signal. Due-but-not-
+    yet-late reminders don't count; this is specifically about the ones
+    sitting there."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT count(*) FROM reminders "
+        "WHERE status = 'queued' AND send_at < now() - interval '30 minutes'"
+    )
+    return cur.fetchone()[0]
+
+
+def emf_log(due, sent, failed, overdue):
+    """One Embedded Metric Format log line. CloudWatch Logs parses any
+    line with an `_aws` key like this into custom metrics on its own --
+    no PutMetricData call, no library. Outside Lambda (local/dev, or
+    anywhere logs aren't shipped to CloudWatch) this is just a JSON log
+    line; nothing else treats `_aws` as special.
+
+    flush=True on purpose: stdout is block-buffered (not line-buffered)
+    once it's not attached to a terminal, which is exactly the case
+    inside a container or Lambda. Without this, the line can sit in
+    Python's internal buffer indefinitely -- confirmed locally: without
+    the flush, this line never showed up in `docker logs` even after
+    several 30-second loop iterations, while the plain log.info() calls
+    elsewhere always appeared immediately (logging's StreamHandler
+    flushes on every emit by default; a bare print() does not)."""
+    print(
+        json.dumps(
+            {
+                "_aws": {
+                    "Timestamp": int(time.time() * 1000),
+                    "CloudWatchMetrics": [
+                        {
+                            "Namespace": "WellisStatus",
+                            "Dimensions": [[]],
+                            "Metrics": [
+                                {"Name": "RemindersDue", "Unit": "Count"},
+                                {"Name": "RemindersSent", "Unit": "Count"},
+                                {"Name": "RemindersFailed", "Unit": "Count"},
+                                {"Name": "OverdueReminders", "Unit": "Count"},
+                            ],
+                        }
+                    ],
+                },
+                "RemindersDue": due,
+                "RemindersSent": sent,
+                "RemindersFailed": failed,
+                "OverdueReminders": overdue,
+            }
+        ),
+        flush=True,
+    )
+
+
 def send_one(rid, channel, email):
     """Returns True if the send succeeded (dry-run counts as success)."""
     if not MESSAGING_URL:
@@ -77,7 +133,13 @@ def send_one(rid, channel, email):
     except Exception as exc:  # noqa: BLE001 - one bad send must not stop the batch
         log.warning(
             json.dumps(
-                {"event": "send_failed", "reminder_id": rid, "channel": channel, "error": str(exc)}
+                {
+                    "level": "error",
+                    "event": "send_failed",
+                    "reminder_id": rid,
+                    "channel": channel,
+                    "error": str(exc),
+                }
             )
         )
         return False
@@ -101,7 +163,7 @@ def write_receipt(sent):
             Bucket=RECEIPT_BUCKET, Key=f"receipts/{int(time.time())}.json", Body=body.encode()
         )
     except Exception as exc:  # noqa: BLE001 - a receipt failure must not crash the run
-        log.warning(json.dumps({"event": "receipt_failed", "error": str(exc)}))
+        log.warning(json.dumps({"level": "error", "event": "receipt_failed", "error": str(exc)}))
 
 
 def run_once(conn):
@@ -123,8 +185,10 @@ def run_once(conn):
     if sent:
         write_receipt(sent)
 
-    counts = {"due": len(rows), "sent": len(sent), "failed": failed}
+    overdue = count_overdue(conn)
+    counts = {"due": len(rows), "sent": len(sent), "failed": failed, "overdue": overdue}
     log.info(json.dumps({"event": "run_complete", **counts}))
+    emf_log(len(rows), len(sent), failed, overdue)
     return counts
 
 
@@ -135,7 +199,7 @@ def main():
             try:
                 run_once(conn)
             except psycopg2.OperationalError as exc:
-                log.warning(json.dumps({"event": "db_reconnect", "error": str(exc)}))
+                log.warning(json.dumps({"level": "error", "event": "db_reconnect", "error": str(exc)}))
                 try:
                     conn.close()
                 except Exception:  # noqa: BLE001

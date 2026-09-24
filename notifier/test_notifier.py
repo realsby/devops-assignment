@@ -13,6 +13,7 @@
 # db/init/01_roles.sql run by hand:
 #   docker run -d -p 127.0.0.1:55432:5432 \
 #     -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=wellis postgres:18-alpine
+import json
 import os
 import urllib.error
 import uuid
@@ -119,6 +120,45 @@ def test_fetch_due_only_returns_due_reminders(admin_conn, conn, patient):
 
     assert due_id in ids
     assert future_id not in ids
+
+
+# --- count_overdue: queued reminders more than 30 minutes late ---
+
+
+def test_count_overdue_counts_only_queued_reminders_over_30_minutes_late(admin_conn, conn, patient):
+    patient_id, _ = patient
+    now = datetime.now(timezone.utc)
+    queue_reminder(admin_conn, patient_id, now - timedelta(minutes=45))  # overdue
+    queue_reminder(admin_conn, patient_id, now - timedelta(minutes=10))  # due, not overdue yet
+
+    assert notifier.count_overdue(conn) == 1
+
+
+def test_count_overdue_ignores_reminders_already_sent(admin_conn, conn, patient):
+    patient_id, _ = patient
+    rid = queue_reminder(admin_conn, patient_id, datetime.now(timezone.utc) - timedelta(minutes=45))
+    cur = admin_conn.cursor()
+    cur.execute("UPDATE reminders SET status = 'sent' WHERE id = %s", (rid,))
+    admin_conn.commit()
+
+    assert notifier.count_overdue(conn) == 0
+
+
+# --- emf_log: nothing else would catch a broken EMF shape ---
+
+
+def test_emf_log_prints_valid_json_with_the_aws_key(capsys):
+    notifier.emf_log(due=5, sent=3, failed=1, overdue=2)
+
+    out = json.loads(capsys.readouterr().out)
+
+    assert out["_aws"]["CloudWatchMetrics"][0]["Namespace"] == "WellisStatus"
+    metric_names = {m["Name"] for m in out["_aws"]["CloudWatchMetrics"][0]["Metrics"]}
+    assert metric_names == {"RemindersDue", "RemindersSent", "RemindersFailed", "OverdueReminders"}
+    assert out["RemindersDue"] == 5
+    assert out["RemindersSent"] == 3
+    assert out["RemindersFailed"] == 1
+    assert out["OverdueReminders"] == 2
 
 
 # --- run_once: DB state transitions under the app role, HTTP layer monkeypatched out ---
