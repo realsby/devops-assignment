@@ -5,9 +5,11 @@ on:
   push:
     branches: [main]
 
+# Superseded PR runs get cancelled. Runs on main don't: cancelling one
+# mid-deploy could leave portal and notifier on different versions.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -156,6 +158,10 @@ jobs:
     # first terraform apply), so an unconfigured fork doesn't go red.
     if: github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
+    # One prod deploy at a time, never cancelled halfway.
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
