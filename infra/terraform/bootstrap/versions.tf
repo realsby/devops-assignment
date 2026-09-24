@@ -1,13 +1,15 @@
-# Local state on purpose: this module creates the S3 bucket that every
-# other Terraform state (including its own, eventually) lives in. There's
-# nothing to point a backend at yet.
-#
-# After the first apply: add a backend "s3" block here pointing at the
-# bucket this module just created (key = "bootstrap/terraform.tfstate",
-# same bucket as prod/), then `terraform init -migrate-state` once, by
-# hand. Not done in this change — nothing to migrate into yet.
+# Started with local state (this module creates the bucket everything
+# else stores state in), then moved into that bucket after the first
+# apply with `terraform init -migrate-state`.
 terraform {
   required_version = ">= 1.9"
+
+  backend "s3" {
+    bucket       = "wellis-status-tfstate-151177426529"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "eu-central-1"
+    use_lockfile = true
+  }
 
   required_providers {
     aws = {
