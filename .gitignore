@@ -18,3 +18,7 @@ sa-key.json
 *.tfplan
 crash.log
 crash.*.log
+
+# archive_file build output (infra/terraform/prod/uptime.tf) — rebuilt
+# from uptime/handler.py on every plan/apply, not something to track.
+infra/terraform/prod/.build/

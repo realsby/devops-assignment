@@ -47,3 +47,9 @@ variable "neon_org_id" {
   type    = string
   default = "org-little-feather-38495886"
 }
+
+variable "alert_email" {
+  type        = string
+  description = "Where alarm ALARM/OK notifications go. SNS will send a subscription-confirmation email here on first apply that has to be clicked before anything actually arrives."
+  default     = "realsby@gmail.com"
+}
