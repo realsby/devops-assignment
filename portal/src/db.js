@@ -1,13 +1,11 @@
 const { Pool } = require("pg");
 
-// Connects as the postgres superuser. It was the account that already
-// existed when we set the box up, and everything worked, so it stayed.
+// Local default only. Everywhere else sets DATABASE_URL explicitly.
+// sslmode (e.g. for Neon) lives in the URL itself — pg parses it.
+const DEFAULT_LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:5432/wellis";
+
 const pool = new Pool({
-  host: process.env.DB_HOST || "127.0.0.1",
-  port: Number(process.env.DB_PORT || 5432),
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "postgres",
-  database: process.env.DB_NAME || "wellis",
+  connectionString: process.env.DATABASE_URL || DEFAULT_LOCAL_URL,
   max: 10,
 });
 
