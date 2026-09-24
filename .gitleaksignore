@@ -1,0 +1,33 @@
+# Known, already-burned secrets from before this repo had any secret
+# hygiene. All are documented in FINDINGS.md (SEC-04: committed .env
+# secrets; SEC-05: the GCP service-account key) and treated as
+# compromised — rotated, not scrubbed from history. Per SEC-05, rewriting
+# history wouldn't un-leak them anyway (every existing clone already has
+# them), so they stay in the log and are ignored here instead. This file
+# exists so gitleaks only fails the build on genuinely new leaks, not on
+# settled history nobody can act on by editing it.
+#
+# Fingerprints below are `commit:file:rule:line`, exactly as
+# `gitleaks detect` prints them.
+
+# .env — DB_PASSWORD, MESSAGING_KEY (commit 90c1d36, "move config to .env")
+90c1d36914bb7c6deb1cb5860cb34e70e6742c12:.env:generic-api-key:6
+90c1d36914bb7c6deb1cb5860cb34e70e6742c12:.env:generic-api-key:8
+
+# .env.staging — same two secrets, reused (commit 7ddfec0, "add staging env file")
+7ddfec01e3dc4c829cd626396377f842bdab1724:.env.staging:generic-api-key:6
+7ddfec01e3dc4c829cd626396377f842bdab1724:.env.staging:generic-api-key:8
+
+# sa-key.json — GCP service-account private key (commit 03873fd, "notifier
+# writes receipts to GCS; add sa-key so it can auth on the box")
+03873fdcc759bf141bcc98f23f9490fd7d7e15a7:sa-key.json:private-key:5
+
+# FINDINGS.md quotes that same MESSAGING_KEY verbatim while documenting
+# SEC-04/SEC-10 — not a new secret, a citation of the one above.
+07d01d15fabd26707b161627f99c48f7f3d665c0:FINDINGS.md:generic-api-key:36
+
+# Not secrets: the fixed local-only dev/test tokens, committed in 171601c
+# before the inline gitleaks:allow comments were added. The inline allow
+# only covers commits after it, a history scan still sees this commit.
+171601c4b46b1b415ff4558390b463f1cd7ac1a6:Makefile:curl-auth-header:10
+171601c4b46b1b415ff4558390b463f1cd7ac1a6:scripts/test.sh:generic-api-key:14

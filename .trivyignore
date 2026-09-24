@@ -1,0 +1,16 @@
+# Base-image-internal findings only. Nothing here is a dependency we
+# chose — both are bundled inside public.ecr.aws/lambda/python:3.13
+# itself and are unreachable from our code (confirmed: `import <name>`
+# fails in the running container for both). Real findings in our own
+# app dependencies are not excluded here.
+
+# msgpack (GHSA-6v7p-g79w-8964): pip's own vendored internal copy, at
+# /var/lang/lib/python3.13/site-packages/pip/_vendor/msgpack. Not a
+# top-level installed package, not in notifier/requirements.txt.
+GHSA-6v7p-g79w-8964
+
+# setuptools (CVE-2025-47273): a static .whl file used as test fixture
+# data by CPython's own standard-library test suite, at
+# /var/lang/lib/python3.13/test/wheeldata/setuptools-79.0.1-py3-none-any.whl.
+# Never installed or imported.
+CVE-2025-47273

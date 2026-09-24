@@ -11,7 +11,7 @@ PORTAL_URL="postgresql://portal_app:portal_app_dev_password@db:5432/wellis"
 NOTIFIER_URL="postgresql://notifier_app:notifier_app_dev_password@db:5432/wellis"
 # Fixed test-only token, not a secret — raw value "test-token".
 TEST_TOKEN="test-token"
-TEST_TOKEN_HASH="4c5dc9b7708905f77f5e5d16316b5dfb425e68cb326dcd55a860e90a7707031e"
+TEST_TOKEN_HASH="4c5dc9b7708905f77f5e5d16316b5dfb425e68cb326dcd55a860e90a7707031e" # gitleaks:allow — sha256 of "test-token" above, not a secret
 
 echo "==> building images"
 docker compose build db migrate portal notifier >/dev/null

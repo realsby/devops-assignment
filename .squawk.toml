@@ -1,0 +1,37 @@
+# squawk config for wellis-status migrations.
+#
+# Default-on: every rule squawk ships stays enabled unless it's listed
+# below, with a reason. This is a short denylist, not a curated allowlist
+# — the rules the brief called out by name (renames, adding NOT NULL,
+# non-concurrent index) are not listed here because they need to stay on.
+#
+# Scope: only migrations/003 onward get linted at all — see
+# .github/workflows/ci.yml, which excludes 001/002 from the squawk
+# invocation. 001/002 were already applied to the real prod DB by hand
+# before this pipeline existed (see RUNBOOK.md); linting settled history
+# that can't be changed is noise, not signal.
+
+pg_version = "18.0"
+
+excluded_rules = [
+  # scripts/migrate.sh sets lock_timeout and statement_timeout for every
+  # migration it runs, via PGOPTIONS, before psql ever opens the file —
+  # see the runner's own header comment. Requiring a matching `SET`
+  # statement inside each .sql file on top of that would be redundant,
+  # not an extra safety net.
+  "require-lock-timeout",
+  "require-statement-timeout",
+
+  # scripts/migrate.sh already wraps each file in its own BEGIN/COMMIT
+  # and records it in schema_migrations before moving to the next one, so
+  # a file is never re-run after a partial failure. That's what this rule
+  # checks for (IF NOT EXISTS, explicit transactions) — handled one level
+  # up, by the runner, not per-statement in the SQL itself.
+  "prefer-robust-stmts",
+
+  # Schema-design taste (serial/int vs identity/bigint), not a live-table
+  # locking/breakage risk, and not worth relitigating on every migration
+  # for id columns that already exist in prod.
+  "prefer-bigint-over-int",
+  "prefer-identity",
+]

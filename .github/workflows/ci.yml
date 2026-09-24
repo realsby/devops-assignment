@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Same path a developer uses: `make up` then `make test`. This is also
+  # the only thing that actually proves the one-command bring-up works,
+  # not just that the individual pieces build.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: bring up the stack and run tests
+        run: |
+          make up
+          make test
+
+      - name: dump compose logs
+        if: failure()
+        run: docker compose logs
+
+      - name: tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  # Lints migrations/003 onward with squawk. 001/002 are excluded — they
+  # were already applied to the real prod DB by hand before this pipeline
+  # existed (see RUNBOOK.md), so linting them is noise on settled history
+  # nobody can act on. Rule configuration lives in .squawk.toml, not
+  # flags here.
+  migration-lint:
+    name: migration-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: squawk
+        run: |
+          files=$(find migrations -maxdepth 1 -name '*.sql' ! -name '001_*' ! -name '002_*' | sort)
+          echo "linting: $files"
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/sbdchd/squawk:2.66.0 \
+            -c .squawk.toml --reporter gcc $files
+
+  # gitleaks over the full commit history, not just the current tree.
+  # Known-burned secrets (the committed .env files, sa-key.json — see
+  # FINDINGS.md SEC-04/SEC-05) have their fingerprints recorded in
+  # .gitleaksignore with a comment, so only genuinely new leaks fail
+  # this job.
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          # gitleaks needs real history to scan; actions/checkout
+          # defaults to a shallow clone, which would hide every commit
+          # this job exists to look at.
+          fetch-depth: 0
+
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            zricethezav/gitleaks:v8.30.1 \
+            detect --source . --no-banner
+
+  # Builds both deploy images and scans each for CRITICAL/HIGH
+  # vulnerabilities with fixes available (--ignore-unfixed). Anything
+  # excluded is in .trivyignore with a reason — base-image-internal
+  # artifacts we don't control, not our own dependencies.
+  images:
+    name: images
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: build portal image
+        run: docker build -t wellis-portal:ci ./portal
+
+      - name: build notifier image
+        run: docker build -t wellis-notifier:ci ./notifier
+
+      - name: trivy — portal
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/work" -w /work \
+            aquasec/trivy:0.74.0 image \
+            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
+            wellis-portal:ci
+
+      - name: trivy — notifier
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/work" -w /work \
+            aquasec/trivy:0.74.0 image \
+            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
+            wellis-notifier:ci
