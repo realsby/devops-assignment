@@ -82,24 +82,30 @@ def _scalar(raw):
 
 
 def _parse_yaml(text):
+    """Two top-level sections: `people` (full access.* shape) and
+    `services` (non-human tokens -- see team.yaml's header)."""
     lines = [line for line in text.split("\n") if not re.match(r"^\s*#", line) and line.strip() != ""]
-    people = []
+    sections = {"people": [], "services": []}
+    current_section = None
     current = None
-    current_access = None
     in_access = False
 
     for raw_line in lines:
         indent = len(raw_line) - len(raw_line.lstrip(" "))
         stripped = raw_line.strip()
 
-        if stripped == "people:":
+        if stripped in ("people:", "services:"):
+            if current is not None:
+                sections[current_section].append(current)
+            current = None
+            in_access = False
+            current_section = stripped[:-1]
             continue
 
         if stripped.startswith("- "):
             if current is not None:
-                people.append(current)
+                sections[current_section].append(current)
             current = {}
-            current_access = None
             in_access = False
             stripped = stripped[2:]
             indent += 2  # the "- " counts as part of this item's own indent
@@ -112,22 +118,21 @@ def _parse_yaml(text):
 
         if key == "access":
             in_access = True
-            current_access = {}
-            current["access"] = current_access
+            current["access"] = {}
             continue
 
         # access.* fields are indented deeper than the person's own
         # top-level fields (id, name, role, ...); once we've seen
         # "access:", anything indented under it belongs there.
         if in_access and indent > 4:
-            current_access[key] = _scalar(value)
+            current["access"][key] = _scalar(value)
         else:
             in_access = False
             current[key] = _scalar(value)
 
     if current is not None:
-        people.append(current)
-    return {"people": people}
+        sections[current_section].append(current)
+    return sections
 
 
 def load_team():
@@ -139,6 +144,14 @@ def find_person(team, person_id):
         if p["id"] == person_id:
             return p
     return None
+
+
+def _is_active(person):
+    """A person marked left must expect no access anywhere. Their
+    access.* fields stay in team.yaml as a historical record (that's
+    the point of keeping them) but review/offboard don't treat those
+    fields as still wanted once status is left."""
+    return person["status"] != "left"
 
 
 # --------------------------------------------------------------------------
@@ -323,9 +336,10 @@ def portal_token_remove(person_id):
 def cmd_review(_args):
     team = load_team()
     people = team["people"]
+    services = team["services"]
     repo = _repo_slug()
 
-    print(f"# access/team.yaml ({len(people)} people)\n")
+    print(f"# access/team.yaml ({len(people)} people, {len(services)} services)\n")
     for p in people:
         a = p["access"]
         print(
@@ -334,6 +348,8 @@ def cmd_review(_args):
             f"legacy_gcp={a.get('legacy_gcp', 'none'):<7} "
             f"portal_token={_yn(a['portal_token']):<3} messaging={_yn(a['messaging_dashboard'])}"
         )
+    for s in services:
+        print(f"  {s['id']:<8} {s['name']:<32} portal_token={_yn(s.get('portal_token'))}")
 
     drift = []
 
@@ -359,7 +375,7 @@ def cmd_review(_args):
     elif status == "error":
         print(f"  WARNING: could not read {PORTAL_TOKENS_PARAM} ({err}) -- skipping")
     else:
-        drift += _diff_portal_tokens(people, live_names)
+        drift += _diff_portal_tokens(people, services, live_names)
 
     if drift:
         print(f"\n# DRIFT ({len(drift)})")
@@ -381,16 +397,21 @@ def _diff_github(people, collaborators, invitations):
     for p in people:
         gh_user = p.get("github")
         seen.add(gh_user)
-        wants_access = p["access"]["github_repo"] != "none"
+        active = _is_active(p)
+        wants_access = active and p["access"]["github_repo"] != "none"
+        # Display label: a left person's access.* field is kept for the
+        # record, but what they're expected to have right now is none --
+        # show that, not the stale historical value.
+        wants_label = p["access"]["github_repo"] if active else "none (left)"
         role = collaborators.get(gh_user)
         invited = gh_user in invitations
         if wants_access and role is None and not invited:
-            drift.append(f"[github] {p['id']}: yaml={p['access']['github_repo']}, github=not a collaborator, no pending invite")
+            drift.append(f"[github] {p['id']}: yaml={wants_label}, github=not a collaborator, no pending invite")
         elif wants_access and role is not None and role != p["access"]["github_repo"]:
-            drift.append(f"[github] {p['id']}: yaml={p['access']['github_repo']}, github={role}")
+            drift.append(f"[github] {p['id']}: yaml={wants_label}, github={role}")
         elif not wants_access and (role is not None or invited):
             state = role or "invited"
-            drift.append(f"[github] {p['id']}: yaml=none, github={state}")
+            drift.append(f"[github] {p['id']}: yaml={wants_label}, github={state}")
     for login, role in collaborators.items():
         if login not in seen:
             drift.append(f"[github] {login}: not in team.yaml, github={role} (unexpected collaborator)")
@@ -401,12 +422,14 @@ def _diff_ssh(people):
     drift = []
     labels = parse_authorized_keys()
     for p in people:
-        wants = p["access"]["ssh"]
+        active = _is_active(p)
+        wants = active and p["access"]["ssh"]
+        wants_label = _yn(p["access"]["ssh"]) if active else "no (left)"
         label = _key_label_for(p)
         has = label is not None
         if wants != has:
             drift.append(
-                f"[ssh] {p['id']}: yaml={_yn(wants)}, authorized_keys={'present' if has else 'absent'}"
+                f"[ssh] {p['id']}: yaml={wants_label}, authorized_keys={'present' if has else 'absent'}"
             )
     known_labels = set()
     for p in people:
@@ -419,19 +442,32 @@ def _diff_ssh(people):
     return drift
 
 
-def _diff_portal_tokens(people, live_names):
+def _diff_portal_tokens(people, services, live_names):
     drift = []
+    # People and services are both checked against the same live SSM
+    # param, just with different rules for what "wants" means: a left
+    # person always wants none (their access.* field is historical, not
+    # current); a service wants whatever its own portal_token says.
+    entries = []
     for p in people:
-        wants = p["access"]["portal_token"]
-        has = p["id"] in live_names
+        active = _is_active(p)
+        wants = active and p["access"]["portal_token"]
+        wants_label = _yn(p["access"]["portal_token"]) if active else "no (left)"
+        entries.append((p["id"], wants, wants_label))
+    for s in services:
+        wants = bool(s.get("portal_token"))
+        entries.append((s["id"], wants, _yn(wants)))
+
+    for entity_id, wants, wants_label in entries:
+        has = entity_id in live_names
         if wants != has:
             drift.append(
-                f"[portal_token] {p['id']}: yaml={_yn(wants)}, API_TOKENS={'present' if has else 'absent'}"
+                f"[portal_token] {entity_id}: yaml={wants_label}, API_TOKENS={'present' if has else 'absent'}"
             )
-    known_ids = {p["id"] for p in people}
+    known_ids = {entity_id for entity_id, _, _ in entries}
     for name in live_names:
         if name not in known_ids:
-            drift.append(f"[portal_token] {name}: token in API_TOKENS, no matching id in team.yaml (may be a service token, e.g. ci-smoke)")
+            drift.append(f"[portal_token] {name}: token in API_TOKENS, no matching id in team.yaml people/services")
     return drift
 
 

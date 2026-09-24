@@ -35,6 +35,19 @@
 #                        (the messaging provider's own dashboard — no
 #                        API, tracked here for the offboarding checklist
 #                        only)
+#
+# status: active | left — a person's access.* fields are the historical
+# record of what they had (or, for an active person, what they should
+# have); review and offboard don't treat them as still wanted once
+# status is left. A finished offboarding should never show up as drift,
+# so don't hand-edit access.* back down to "none" when someone leaves —
+# leave the record alone and flip status instead.
+#
+# services: — non-human identities (CI jobs, external reviewer access)
+# that hold a portal token but aren't people: no github/ssh/aws/etc,
+# just id, name, portal_token, and a note on what the token is for.
+# review checks these against the live API_TOKENS the same way it
+# checks people's portal_token.
 
 people:
   # The real GitHub repo owner and the new infra hire (this take-home).
@@ -52,8 +65,11 @@ people:
       # Never had it and never will -- hired after the GCP era, and it's
       # being decommissioned, not handed to anyone new.
       legacy_gcp: none
-      # The "reviewer" token in infra/terraform/prod/ssm.tf.
-      portal_token: yes
+      # No personal token -- it's a care-team tool, engineers debug
+      # through logs, not the portal API. (Not the "reviewer" token
+      # either -- that's for external take-home reviewers, see
+      # services: below, not this engineer.)
+      portal_token: no
       messaging_dashboard: yes
 
   - id: ilya
@@ -69,7 +85,10 @@ people:
       # below -- the old project is being decommissioned, not kept around
       # for whoever set it up.
       legacy_gcp: owner
-      portal_token: yes
+      # No personal token -- care-team tool, engineers debug through
+      # logs, not the API. Least privilege: don't hold a credential you
+      # don't use.
+      portal_token: no
       messaging_dashboard: yes
 
   - id: rover
@@ -146,3 +165,17 @@ people:
       legacy_gcp: editor
       portal_token: no
       messaging_dashboard: yes
+
+services:
+  # Non-human tokens in the portal's API_TOKENS param. Checked by
+  # `review` the same way as people's portal_token, just without the
+  # rest of the access.* shape -- these aren't accounts.
+  - id: reviewer
+    name: External take-home reviewer
+    portal_token: yes
+    note: For whoever is grading this take-home; revoke once the review is done.
+
+  - id: ci-smoke
+    name: CI smoke test
+    portal_token: yes
+    note: Used by the deploy job's post-deploy smoke test.
