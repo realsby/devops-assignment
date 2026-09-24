@@ -17,8 +17,9 @@ Claude Code, three roles:
 - **One subagent (Claude Sonnet 5):** implementation. It was one continuous
   conversation, continued task by task, so it kept context.
 
-`agent-traces/` holds that lead-to-subagent conversation, unedited: raw
-JSONL plus a rendered Markdown copy.
+`agent-traces/` holds that lead-to-subagent conversation: raw JSONL plus a
+rendered Markdown copy. It is unedited except for masked secret values
+(see `agent-traces/README.md`).
 
 ## How the work was split
 
@@ -82,6 +83,10 @@ carries weight:
 - **A miss we both made.** The deploy role trusted the classic OIDC `sub`
   (`repo:owner/repo:ref:...`). GitHub now issues immutable subjects for this
   repo, so the first migrate run failed on AssumeRole. Fixed in `e5ae13e`.
+- **CI could cancel a deploy halfway.** The workflow-level
+  `cancel-in-progress: true` also applied to runs on main, so a quick
+  second push could stop a run between updating the portal and the
+  notifier. Now only PR runs get cancelled, and deploys are serialised.
 
 ## What I refused to automate blindly
 
