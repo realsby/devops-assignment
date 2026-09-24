@@ -32,11 +32,12 @@ variable "aws_region" {
   default = "eu-central-1"
 }
 
-variable "github_repo" {
+variable "github_oidc_sub_prefix" {
   type        = string
-  description = "owner/repo allowed to assume the deploy role, restricted to refs/heads/main in github_deploy.tf."
-  default     = "realsby/devops-assignment"
+  description = "OIDC sub prefix GitHub issues for the repo (immutable form, owner@id/repo@id)."
+  default     = "repo:realsby@1173351/devops-assignment@1385494367"
 }
+
 
 variable "neon_project_id" {
   type    = string

@@ -27,7 +27,10 @@ data "aws_iam_policy_document" "github_deploy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+      # GitHub issues immutable subjects for this repo (owner and repo ids
+      # baked in), so a renamed or re-created repo can't inherit this trust.
+      # Check with: gh api repos/<owner>/<repo>/actions/oidc/customization/sub
+      values = ["${var.github_oidc_sub_prefix}:ref:refs/heads/main"]
     }
   }
 }
