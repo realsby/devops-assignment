@@ -27,10 +27,13 @@ both test suites in containers against the compose DB — as the app roles,
 not the owner, so the grants in `migrations/004_app_role_grants.sql` are
 actually exercised.
 
-Note: `migrations/003_rename_name_column.sql` is a known-breaking
-migration, deliberately left as-is and not yet applied — see
-`FINDINGS.md` (DATA-01/DATA-02). `make up` will fail at the `migrate` step
-until that's resolved in a later change.
+Note: `migrations/003_add_first_last_name.sql` adds `first_name`/
+`last_name` alongside `full_name` (expand-only — nothing renamed, nothing
+made `NOT NULL`, nothing dropped) and backfills/triggers them from
+`full_name`. `full_name` stays the source of truth for now; `004` and the
+app code keep reading/writing it unchanged. The original in-place-rename
+version of 003 is gone — it was never applied anywhere (see git history
+and `FINDINGS.md` DATA-01/DATA-02/DATA-03 for what was wrong with it).
 
 ## Layout
 

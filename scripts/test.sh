@@ -24,6 +24,15 @@ echo "==> migrate"
 # even 0, as failure) — `run` blocks and gives us the real exit code.
 docker compose run --rm migrate
 
+echo "==> check: no patient row with NULL first_name"
+# Cheap guard on 003's trigger/backfill. CI runs this after `make up`,
+# so it checks the seeded rows; on an empty db it checks nothing.
+null_count=$(docker compose run --rm --no-deps --entrypoint psql migrate "$ADMIN_URL" -Atqc "SELECT count(*) FROM patients WHERE first_name IS NULL;")
+if [ "$null_count" != "0" ]; then
+  echo "found $null_count patient row(s) with NULL first_name — 003's trigger/backfill isn't doing its job"
+  exit 1
+fi
+
 echo "==> portal tests (as portal_app)"
 docker compose run --rm --no-deps \
   -e DATABASE_URL="$PORTAL_URL" \
