@@ -1,8 +1,6 @@
 const express = require("express");
 const { pool } = require("./db");
-const { parseTokens, requireAuth } = require("./auth");
-
-const tokens = parseTokens(process.env.API_TOKENS);
+const { requireAuth } = require("./auth");
 
 const app = express();
 app.use(express.json());
@@ -46,7 +44,7 @@ app.get("/healthz", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
-app.use("/api", requireAuth(tokens));
+app.use("/api", requireAuth());
 
 // Ops summary: how many patients, how many reminders waiting.
 app.get(

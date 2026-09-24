@@ -37,6 +37,16 @@ resource "aws_ssm_parameter" "portal_api_tokens" {
   name  = "/wellis/prod/portal/API_TOKENS"
   type  = "SecureString"
   value = local.api_tokens
+
+  # Terraform seeds this once (reviewer + ci-smoke). From then on,
+  # scripts/access/access.py owns it — offboard removes a leaver's named
+  # token by editing this param directly, and portal picks the change up
+  # on its own within 5 minutes (see portal/src/load_ssm_params.js). A
+  # later `terraform apply` must not silently overwrite whatever the
+  # access script has done to it since.
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "notifier_database_url" {
