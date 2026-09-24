@@ -10,12 +10,10 @@ import datetime
 
 import psycopg2
 
-DB = dict(
-    host=os.environ.get("DB_HOST", "127.0.0.1"),
-    port=int(os.environ.get("DB_PORT", "5432")),
-    user=os.environ.get("DB_USER", "postgres"),
-    password=os.environ.get("DB_PASSWORD", "postgres"),
-    dbname=os.environ.get("DB_NAME", "wellis"),
+# Runs as the owner (it inserts into patients, which the app roles can't)
+# — see the `seed` service in docker-compose.yml.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/wellis"
 )
 
 FIRST = ["Sanne", "Jeroen", "Fatima", "Daan", "Emma", "Mohammed", "Sophie",
@@ -27,7 +25,7 @@ random.seed(20260731)
 
 
 def main():
-    conn = psycopg2.connect(**DB)
+    conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
     cur.execute("SELECT count(*) FROM patients")
     if cur.fetchone()[0] > 0:

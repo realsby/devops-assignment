@@ -1,32 +1,119 @@
-# Local-ish stack. This is also roughly what runs on the box: the same
-# compose file is copied up and `docker compose up -d` is run there by hand.
-version: "3"
+# Local stack. No .env file required — every value here is either a
+# throwaway dev credential (never used anywhere but this compose network)
+# or a placeholder that's safe to commit. Real secrets live in the deploy
+# target's secret store, never here.
+#
+# db (owner) -> migrate (owner, DDL/grants) -> seed (owner, fixture data)
+#            -> portal / notifier (least-privilege app roles)
 
 services:
   db:
-    image: postgres:15
+    image: postgres:18-alpine
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: wellis
     ports:
-      # Exposed so we can connect with a GUI from a laptop when debugging.
-      - "0.0.0.0:5432:5432"
+      # Loopback only — this used to be 0.0.0.0, reachable from anywhere
+      # (see FINDINGS.md SEC-03). A GUI on the same machine can still
+      # reach it on 127.0.0.1:5432.
+      - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18+ images store data under /var/lib/postgresql itself
+      # (versioned subdirectory), not .../data — see
+      # https://github.com/docker-library/postgres/pull/1259
+      - pgdata:/var/lib/postgresql
+      # Local-only: creates portal_app/notifier_app. Only runs once, on
+      # first init of an empty data dir. See db/init/01_roles.sql.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wellis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # One-shot: applies migrations/*.sql (including the role grants) as the
+  # owner, then exits. Nothing else starts until this succeeds.
+  migrate:
+    image: postgres:18-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+      - ./scripts:/scripts:ro
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/wellis
+    entrypoint: ["sh", "/scripts/migrate.sh"]
+
+  # One-shot: loads the synthetic demo data (skips itself if already
+  # loaded). Runs as the owner — it inserts into patients, which the app
+  # roles can't (they're read-only there by design).
+  seed:
+    build: ./notifier
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./scripts:/scripts:ro
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/wellis
+      # pip installed psycopg2/boto3 into /var/task (see notifier/Dockerfile);
+      # that's only on sys.path by accident for notifier.py, which lives
+      # there. seed_db.py lives in the mounted ./scripts instead, so it
+      # needs this to find them.
+      PYTHONPATH: /var/task
+    entrypoint: ["python", "/scripts/seed_db.py"]
 
   portal:
     build: ./portal
-    env_file: ./.env
-    ports:
-      - "8080:8080"
     depends_on:
-      - db
+      migrate:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://portal_app:portal_app_dev_password@db:5432/wellis
+      PORT: 8080
+      # Fixed LOCAL-ONLY dev token, not a secret: raw value is
+      # "local-dev-token" (see README's curl example). name:sha256hex —
+      # see portal/src/auth.js.
+      API_TOKENS: "local:0cd48eed49739dfdd99efaef37d251aae5a80866e5954763c6597943fff5ce9b"
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   notifier:
     build: ./notifier
-    env_file: ./.env
     depends_on:
-      - db
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://notifier_app:notifier_app_dev_password@db:5432/wellis
+      # Empty -> dry-run: logs what it would send and marks reminders
+      # sent, instead of calling a real provider. We have no real
+      # provider locally (or, currently, at all).
+      MESSAGING_URL: ""
+      MESSAGING_KEY: ""
+      # Unset -> no receipts written. No default bucket, on purpose.
+      RECEIPT_BUCKET: ""
+    # The image's own CMD is the Lambda handler entrypoint, which expects
+    # the Lambda Runtime API and just hangs locally. Override it to run
+    # the polling loop instead.
+    entrypoint: ["python", "notifier.py"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "tr '\\0' ' ' < /proc/1/cmdline | grep -q notifier.py"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 volumes:
   pgdata:

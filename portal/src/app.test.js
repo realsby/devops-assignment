@@ -1,22 +1,35 @@
-// Integration tests against a real Postgres. Reads DATABASE_URL; falls
-// back to the throwaway container used for local/CI runs (see
-// AGENT-NOTES or the test-run instructions for how to start one):
+// Integration tests against a real Postgres.
+//
+// The app itself connects via DATABASE_URL — under `make test` that's
+// the portal_app role, the same one a real deploy runs under. Fixture
+// setup/teardown use ADMIN_DATABASE_URL (the owner) instead, since
+// portal_app can't insert into patients or delete reminders — which is
+// the point: running the app as its real role exercises the grants in
+// migrations/004_app_role_grants.sql instead of assuming they're right.
+//
+// `make test` sets all of this up. For an ad-hoc run without it, falls
+// back to a throwaway container with 001, 002 and 004 applied and
+// db/init/01_roles.sql run by hand:
 //   docker run -d -p 127.0.0.1:55432:5432 \
 //     -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=wellis postgres:18-alpine
-// with migrations/001_init.sql and 002_add_index.sql applied.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
+const { Pool } = require("pg");
 
-const TOKEN = "test-token";
+const TOKEN = process.env.TEST_TOKEN || "test-token";
 const WRONG_TOKEN = "wrong-token";
 
-process.env.API_TOKENS = `tester:${crypto.createHash("sha256").update(TOKEN).digest("hex")}`;
+process.env.API_TOKENS =
+  process.env.API_TOKENS || `tester:${crypto.createHash("sha256").update(TOKEN).digest("hex")}`;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:55432/wellis";
 
+const ADMIN_DATABASE_URL = process.env.ADMIN_DATABASE_URL || process.env.DATABASE_URL;
+
 const app = require("./app");
-const { pool } = require("./db");
+const { pool } = require("./db"); // the app's own pool — connects as whatever DATABASE_URL says
+const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL });
 
 let server;
 let baseUrl;
@@ -29,7 +42,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 
   patientEmail = `test.patient.${Date.now()}@example.com`;
-  const inserted = await pool.query(
+  const inserted = await adminPool.query(
     "INSERT INTO patients (full_name, email, dob) VALUES ($1, $2, $3) RETURNING id",
     ["Test Patient", patientEmail, "1990-01-01"]
   );
@@ -37,9 +50,10 @@ before(async () => {
 });
 
 after(async () => {
-  await pool.query("DELETE FROM reminders WHERE patient_id = $1", [patientId]);
-  await pool.query("DELETE FROM patients WHERE id = $1", [patientId]);
+  await adminPool.query("DELETE FROM reminders WHERE patient_id = $1", [patientId]);
+  await adminPool.query("DELETE FROM patients WHERE id = $1", [patientId]);
   await new Promise((resolve) => server.close(resolve));
+  await adminPool.end();
   await pool.end();
 });
 

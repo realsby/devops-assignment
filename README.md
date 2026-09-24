@@ -12,19 +12,35 @@ All data in this repository is synthetic. No real person appears in it.
 ## Run it locally
 
 ```
-docker compose up -d db
-psql "postgresql://postgres:postgres@127.0.0.1:5432/wellis" < migrations/001_init.sql
-psql "postgresql://postgres:postgres@127.0.0.1:5432/wellis" < migrations/002_add_index.sql
-python3 scripts/seed_db.py
-docker compose up -d --build portal notifier
-curl http://127.0.0.1:8080/api/summary
+make up
 ```
+
+One command, no `.env` file needed. Builds the images, brings up Postgres,
+runs migrations as the owner, seeds demo data, then starts `portal` and
+`notifier` connected as their own least-privilege roles. Prints the URL and
+a couple of `curl` examples (portal requires `Authorization: Bearer
+<token>` on everything under `/api` — a fixed, local-only dev token is
+printed with it).
+
+`make down` tears the stack down, `make logs` tails it, `make test` runs
+both test suites in containers against the compose DB — as the app roles,
+not the owner, so the grants in `migrations/004_app_role_grants.sql` are
+actually exercised.
+
+Note: `migrations/003_rename_name_column.sql` is a known-breaking
+migration, deliberately left as-is and not yet applied — see
+`FINDINGS.md` (DATA-01/DATA-02). `make up` will fail at the `migrate` step
+until that's resolved in a later change.
 
 ## Layout
 
 - `portal/` — Node/Express API (port 8080)
-- `notifier/` — Python reminder sender
-- `migrations/` — SQL, applied by hand in order
+- `notifier/` — Python reminder sender; same image runs as a Lambda
+  handler or, locally, as a polling loop
+- `migrations/` — SQL, applied in order by `scripts/migrate.sh`
+- `db/init/` — local-only: creates the app DB roles (Terraform does this
+  in prod)
 - `infra/` — how the environment was built (no IaC yet)
-- `scripts/` — deploy and seed
+- `scripts/` — deploy, migrate, seed, test
 - `ops/` — crontab, team/access notes
+- `Makefile` — `up` / `down` / `test` / `logs`
