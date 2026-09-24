@@ -125,8 +125,8 @@ people:
     name: Tomas
     role: Contractor
     github: tomas-ext
-    status: active
-    end_date:
+    status: left
+    end_date: 2026-09-24
     # Deliberately NOT reduced by hand — this still reflects his real old
     # access (ops/TEAM.md: "contract ended, offboarding TODO"), not a
     # tidied-up version of it. `scripts/access/access.py offboard tomas

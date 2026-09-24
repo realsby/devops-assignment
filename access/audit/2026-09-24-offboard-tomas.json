@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-24T17:31:07.354438+00:00",
+  "offboarded": "tomas",
+  "name": "Tomas",
+  "run_by": "yozer",
+  "changes": {
+    "github": {
+      "action": "noop",
+      "reason": "not a collaborator, no pending invite"
+    },
+    "ssh": {
+      "action": "remove",
+      "label": "tomas-ext",
+      "removed": true
+    },
+    "portal_token": {
+      "action": "noop",
+      "reason": "no named token found"
+    },
+    "team_yaml": {
+      "action": "status_set_left",
+      "end_date": "2026-09-24"
+    }
+  },
+  "manual_checklist": [
+    {
+      "system": "messaging dashboard",
+      "todo": "remove/revoke access for Tomas",
+      "owner": "ilya"
+    },
+    {
+      "system": "Slack",
+      "todo": "remove Tomas from #eng and #ops",
+      "owner": "ilya"
+    },
+    {
+      "system": "old GCP project (wellis-status-prod)",
+      "todo": "revoke Tomas's GCP access (currently: editor), if the project is still live",
+      "owner": "ilya"
+    }
+  ],
+  "rotate": [
+    "Old box .env: DB_PASSWORD -- already burned/rotated per FINDINGS.md SEC-04, listed because they had shell access to read it",
+    "Messaging provider API key (MESSAGING_KEY) -- already burned per FINDINGS.md SEC-04, readable in the old box's .env, shell access",
+    "GCP service-account key (sa-key.json) -- already burned per FINDINGS.md SEC-05, readable at editor level on the old project"
+  ]
+}
