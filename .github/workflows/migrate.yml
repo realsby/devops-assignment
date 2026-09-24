@@ -1,0 +1,76 @@
+name: Migrate
+
+# workflow_dispatch only, never on push/PR — this is the human gate.
+# A free private repo can't have required-reviewer branch protection, so
+# a typed confirmation input is the gate instead: workflow_dispatch is
+# already a deliberate manual trigger, and having to type an exact
+# string (not just click a button) is a second, harder-to-fat-finger
+# confirmation on top of that.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "migrate-prod" to run pending migrations against prod'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: migrate
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: check confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "migrate-prod" ]; then
+            echo "the confirm input must be exactly 'migrate-prod'" >&2
+            exit 1
+          fi
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: fetch migrator URL from SSM
+        run: |
+          url="$(aws ssm get-parameter --name /wellis/prod/migrator/DATABASE_URL --with-decryption --query Parameter.Value --output text --region eu-central-1)"
+          echo "::add-mask::$url"
+          echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      # Same exclusion as ci.yml's migration-lint job: 001/002 were
+      # applied to prod by hand before this pipeline existed, so linting
+      # settled history nobody can act on is noise, not signal.
+      - name: squawk on pending migrations
+        run: |
+          mapfile -t files < <(find migrations -maxdepth 1 -name '*.sql' ! -name '001_*' ! -name '002_*' | sort)
+          echo "linting: ${files[*]}"
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/sbdchd/squawk:2.66.0 \
+            -c .squawk.toml --reporter gcc "${files[@]}"
+
+      - name: rehearse on a throwaway Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: ./scripts/migrate-rehearse.sh
+
+      # Only reached if the rehearsal above exited 0.
+      - name: migrate prod
+        run: |
+          docker run --rm -e DATABASE_URL="$MIGRATOR_DATABASE_URL" \
+            -v "$PWD/migrations:/migrations:ro" -v "$PWD/scripts:/scripts:ro" \
+            postgres:18-alpine sh /scripts/migrate.sh
+
+      - name: show schema_migrations
+        run: |
+          docker run --rm postgres:18-alpine \
+            psql "$MIGRATOR_DATABASE_URL" -c "SELECT * FROM schema_migrations ORDER BY version;"

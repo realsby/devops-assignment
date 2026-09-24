@@ -58,6 +58,11 @@ data "aws_iam_policy_document" "github_deploy_permissions" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
+      # scripts/deploy.sh checks this before pushing: tags are immutable
+      # (see ecr.tf), so re-running a deploy for a commit already pushed
+      # once (e.g. retrying after a failed smoke test) must skip the
+      # push instead of failing on an immutable-tag conflict.
+      "ecr:DescribeImages",
     ]
     resources = [
       aws_ecr_repository.portal.arn,

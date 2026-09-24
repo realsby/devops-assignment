@@ -50,11 +50,11 @@ jobs:
 
       - name: squawk
         run: |
-          files=$(find migrations -maxdepth 1 -name '*.sql' ! -name '001_*' ! -name '002_*' | sort)
-          echo "linting: $files"
+          mapfile -t files < <(find migrations -maxdepth 1 -name '*.sql' ! -name '001_*' ! -name '002_*' | sort)
+          echo "linting: ${files[*]}"
           docker run --rm -v "$PWD:/work" -w /work \
             ghcr.io/sbdchd/squawk:2.66.0 \
-            -c .squawk.toml --reporter gcc $files
+            -c .squawk.toml --reporter gcc "${files[@]}"
 
   # gitleaks over the full commit history, not just the current tree.
   # Known-burned secrets (the committed .env files, sa-key.json — see
@@ -142,3 +142,34 @@ jobs:
       - name: validate
         working-directory: infra/terraform/${{ matrix.module }}
         run: terraform validate
+
+  # Only for an actual push to main, and only once every other job has
+  # passed. OIDC-assumed role, no long-lived AWS keys in the repo. All
+  # the actual logic (build, the schema-before-code guard, push, update,
+  # smoke test, rollback) lives in scripts/deploy.sh — the same script
+  # runs by hand, so this step list stays short and there's nowhere else
+  # for the two to drift apart.
+  deploy:
+    name: deploy
+    needs: [test, migration-lint, secrets, images, terraform]
+    # Skipped until the deploy role exists (repo variable set after the
+    # first terraform apply), so an unconfigured fork doesn't go red.
+    if: github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: deploy
+        env:
+          PORTAL_URL: ${{ vars.PORTAL_URL }}
+        run: ./scripts/deploy.sh "$GITHUB_SHA"
