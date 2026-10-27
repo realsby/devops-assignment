@@ -5,6 +5,10 @@ notifier (Lambda, Python, on a 15-minute schedule) over one Neon
 Postgres database. All commands below assume `AWS_PROFILE=
 backendlab-production` and region `eu-central-1`.
 
+> **Decommissioned on 2026-10-27.** The AWS resources, alarms and alert topic
+> are gone (see the Teardown section of `AGENT-NOTES.md`). This runbook
+> describes the stack as it ran.
+
 ## Alarms
 
 All 5 alarms notify the same SNS topic (`wellis-status-alerts`) on both

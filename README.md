@@ -12,6 +12,10 @@ If you're here for the take-home, start with `ASSIGNMENT.md`. See
 `RUNBOOK.md` for on-call, `AGENT-NOTES.md` for how the agent work was
 steered. All data is synthetic — no real person appears in it.
 
+> **Taken down on 2026-10-27.** The AWS deployment was deleted, so the URL
+> below no longer answers. The CI runs in "Evidence it runs" are still
+> there. See the Teardown section of `AGENT-NOTES.md`.
+
 **Deployed URL:** https://q5iggtv4bidmjwrcskfhwle34i0eaxhy.lambda-url.eu-central-1.on.aws
 
 ```

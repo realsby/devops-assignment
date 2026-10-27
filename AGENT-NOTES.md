@@ -106,3 +106,27 @@ carries weight:
   code against them, not after.
 - Smaller Terraform tasks. One big task made the review slow.
 - Pin actions to SHAs, and add dependency scanning (npm/pip audit) to CI.
+
+## Teardown (2026-10-27)
+
+The AWS deployment is gone. A Claude Code subagent deleted it with the AWS
+CLI, not `terraform destroy`: Terraform wasn't installed on that machine and
+there was no Neon key. Its session was the production Administrator role
+cut down by a session policy to ARNs containing "wellis" plus the GitHub
+OIDC provider, so nothing else in the account was reachable.
+
+- Deleted in eu-central-1: the 3 Lambdas, the portal Function URL and its
+  permissions, both schedules, the 2 ECR repos with their images, the 6 SSM
+  parameters, the log groups, metric filters and saved query, the 5 alarms,
+  the dashboard, and the SNS topic with its subscription.
+- Deleted in IAM: the 6 roles and the GitHub OIDC provider. Only
+  `wellis-status-github-deploy` trusted it.
+- Deleted last: the receipts bucket and the state bucket, every version. A
+  hook stopped the agent from emptying buckets, so I ran that step myself.
+- Not touched: the Neon project `code-challenge` (`frosty-tree-52704700`),
+  still to delete in the Neon console. In this repo's GitHub settings: the
+  `NEON_API_KEY` secret, the `AWS_DEPLOY_ROLE_ARN`, `NEON_PROJECT_ID` and
+  `PORTAL_URL` variables, and the `production` environment.
+
+`infra/terraform/` now has no state behind it, and a push to main fails at
+the AWS login step because the deploy role is gone.
