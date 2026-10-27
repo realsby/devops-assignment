@@ -123,10 +123,12 @@ OIDC provider, so nothing else in the account was reachable.
   `wellis-status-github-deploy` trusted it.
 - Deleted last: the receipts bucket and the state bucket, every version. A
   hook stopped the agent from emptying buckets, so I ran that step myself.
-- Not touched: the Neon project `code-challenge` (`frosty-tree-52704700`),
-  still to delete in the Neon console. In this repo's GitHub settings: the
-  `NEON_API_KEY` secret, the `AWS_DEPLOY_ROLE_ARN`, `NEON_PROJECT_ID` and
-  `PORTAL_URL` variables, and the `production` environment.
+- Neon, by hand: the project `code-challenge` (`frosty-tree-52704700`) and
+  its API key are deleted.
+- This repo's GitHub settings: the `NEON_API_KEY` secret, the
+  `AWS_DEPLOY_ROLE_ARN`, `NEON_PROJECT_ID` and `PORTAL_URL` variables and the
+  `production` environment are removed.
 
-`infra/terraform/` now has no state behind it, and a push to main fails at
-the AWS login step because the deploy role is gone.
+Nothing is left in AWS, Neon or the repo settings. `infra/terraform/` has no
+state behind it, the deploy job skips itself without `AWS_DEPLOY_ROLE_ARN`,
+and the repo is archived.
